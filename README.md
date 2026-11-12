@@ -1,3 +1,23 @@
+## Quick setup for the companion (any laptop)
+
+The laptop must be on the same network as the board to reach its IP. Needs `git` and Python 3.8+. Enter the IP shown on the OLED at boot when prompted (use `ip:port` only if you changed the port from 80). The script writes `companion/config.env`, sends a test notification, and merges the Cursor `stop` hook into `~/.cursor/hooks.json` (created if missing, other hooks kept, never duplicated). Restart Cursor afterwards.
+
+PowerShell (Windows):
+
+```powershell
+git clone https://github.com/banningcalvin/esp32-oled-face $HOME\cface
+& $HOME\cface\companion\setup.ps1
+```
+
+bash (macOS/Linux):
+
+```bash
+git clone https://github.com/banningcalvin/esp32-oled-face ~/cface
+~/cface/companion/setup.sh
+```
+
+Re-run the same script any time to change the IP; add `-DryRun` (PowerShell) or `--dry-run` (bash) to preview. To pass the IP non-interactively: `setup.ps1 -Board 192.168.x.x` or `setup.sh 192.168.x.x`.
+
 # CFace
 
 An always-on face for a 0.96 inch SSD1306 OLED on an ESP32. Selectable faces: `idle` (the original), `smoker` (hi-tech, cigarette), and `yesman` (a screen-headed grin). The board boots on `BOOT_FACE` and that face keeps moving; it never sits on a static frame. When a Cursor agent turn finishes, a small companion on your computer posts to the board and the active face plays its alert.

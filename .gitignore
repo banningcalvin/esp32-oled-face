@@ -1,0 +1,7 @@
+.pio
+companion/config.env
+include/config.local.h
+.vscode
+.idea
+*.pyc
+.DS_Store

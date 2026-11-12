@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "command": "python ./hooks/notify-oled.py",
+        "timeout": 5
+      }
+    ]
+  }
+}

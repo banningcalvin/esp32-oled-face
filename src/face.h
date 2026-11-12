@@ -3,6 +3,8 @@
 #include <Adafruit_SSD1306.h>
 #include <Arduino.h>
 
+#include "face_state.h"
+
 // Always-moving face for a 128x64 SSD1306.
 // Idle breathes, blinks, and glances. trigger() eases into a wider,
 // perkier expression, holds it, then eases back. Bottom text stays
@@ -21,7 +23,7 @@ class Face {
 
   // Advance motion and paint one frame. Safe to call as fast as loop() runs;
   // the panel itself is refreshed about 30 times a second.
-  void updateAndDraw(uint32_t now);
+  void updateAndDraw(uint32_t now, FaceState state);
 
  private:
   enum class BlinkPhase : uint8_t { Open, Closing, Shut, Opening };
@@ -52,6 +54,9 @@ class Face {
   float alertShown = 0;
   float alertTarget = 0;
   float pop = 0;
+  float slp = 1.0f;
+  float breathPh = 0;
+  FaceState state = FaceState::Sleeping;
   bool started = false;
   char alertText[21] = {0};
   char bannerText[21] = {0};

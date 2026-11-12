@@ -86,7 +86,8 @@ void Face::setBanner(const char* text, uint32_t untilMs) {
   if (bannerText[0] == '\0') bannerUntil = 0;
 }
 
-void Face::updateAndDraw(uint32_t now) {
+void Face::updateAndDraw(uint32_t now, FaceState st) {
+  state = st;
   step(now);
   if (lastDraw != 0 && (uint32_t)(now - lastDraw) < kFrameMs) return;
   lastDraw = now;
@@ -178,6 +179,19 @@ void Face::step(uint32_t now) {
   if (dt > 0.08f) dt = 0.08f;
   lastUpdate = now;
 
+  bool asleep = state == FaceState::Sleeping;
+  slp = approach(slp, asleep ? 1.0f : 0.0f, dt, asleep ? 2.2f : 5.0f);
+  if (slp < 0.001f) slp = 0.0f;
+  if (slp > 0.999f) slp = 1.0f;
+  breathPh += dt * (1.55f - 0.85f * slp);
+  if (asleep) {
+    alertTarget = 0.0f;
+    pop = 0.0f;
+    lookTargetX = 0.0f;
+    lookTargetY = 0.0f;
+    nextGlanceAt = now + 1000;
+  }
+
   if (alertTarget > 0.0f && reached(now, alertUntil)) {
     alertTarget = 0.0f;
   }
@@ -192,7 +206,7 @@ void Face::step(uint32_t now) {
     if (pop < 0.0f) pop = 0.0f;
   }
 
-  float smileGoal = 0.32f + alertShown * 0.68f;
+  float smileGoal = (0.32f + alertShown * 0.68f) * (1.0f - 0.45f * slp);
   smile = approach(smile, smileGoal, dt, 4.0f);
 
   bool attentive = alertShown > 0.45f || alertTarget > 0.5f;
@@ -284,9 +298,11 @@ void Face::draw(uint32_t now) {
   disp->clearDisplay();
 
   float alert = alertShown;
-  float open = eyeOpenAmount(now);
+  float open = eyeOpenAmount(now) * (1.0f - slp);
+  bool talking = state == FaceState::Talking;
   // Two stacked sines so the bob does not tick like a metronome.
-  float bobF = sinf((float)now * 0.00155f) * 1.35f + sinf((float)now * 0.00265f) * 0.45f;
+  float bobF = (sinf(breathPh) * 1.35f + sinf(breathPh * 1.7f) * 0.45f) * (1.0f - 0.35f * slp);
+  if (talking) bobF *= 1.6f;
   int bob = iround(bobF);
 
   int eyeY = 22;
@@ -317,8 +333,9 @@ void Face::draw(uint32_t now) {
   brow(kLeftEyeX, true);
   brow(kRightEyeX, false);
 
-  int mouthHalf = iround(14.0f + alert * 4.0f);
-  int mouthDepth = iround(2.0f + smile * 5.0f + 0.6f * sinf((float)now * 0.00155f));
+  float chat = talking ? fabsf(sinf((float)now * 0.0155f)) : 0.0f;
+  int mouthHalf = iround(14.0f + alert * 4.0f - chat * 3.0f);
+  int mouthDepth = iround(2.0f + smile * 5.0f + chat * 3.0f + 0.6f * sinf(breathPh));
   if (mouthDepth < 1) mouthDepth = 1;
   int mouthY = 45 + bob;
   drawSmile(OLED_WIDTH / 2, mouthY, mouthHalf, mouthDepth);

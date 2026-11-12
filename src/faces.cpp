@@ -3,6 +3,7 @@
 #include "config.h"
 #include "frame.h"
 
+#include <math.h>
 #include <string.h>
 
 Faces::Faces(Adafruit_SSD1306& display) : disp(&display), idle(display), smoker(display), yesman(display) {}
@@ -69,12 +70,42 @@ const char* Faces::faceId() const {
 bool gFrameDrawn = false;
 
 namespace {
+constexpr uint32_t kWakeMs = 800;
+bool reached(uint32_t now, uint32_t t) { return (int32_t)(now - t) >= 0; }
 constexpr int kStripH = 16;
 constexpr int kScrollPxPerSec = 45;
 constexpr size_t kFitChars = 21;
 }  // namespace
 
+void Faces::setUnread(uint16_t n, uint32_t now) {
+  if (n == 0) {
+    unread = 0;
+    state = FaceState::Sleeping;
+    pending = false;
+    msgUntil = 0;
+    wakeUntil = 0;
+    return;
+  }
+  if (unread == 0) {
+    state = FaceState::Awake;
+    wakeUntil = now + kWakeMs;
+  }
+  unread = n;
+}
+
 void Faces::trigger(const char* caption, const char* rawBody, uint32_t now, uint32_t holdMs) {
+  if (wakeUntil != 0 && !reached(now, wakeUntil)) {
+    pendCaption = caption != nullptr ? caption : "";
+    pendBody = rawBody != nullptr ? rawBody : "";
+    pendHold = holdMs;
+    pending = true;
+    return;
+  }
+  pending = false;
+  fire(now, caption, rawBody, holdMs);
+}
+
+void Faces::fire(uint32_t now, const char* caption, const char* rawBody, uint32_t holdMs) {
   size_t n = 0;
   if (which == Which::Idle) {
     const char* t = (caption != nullptr && caption[0] != '\0') ? caption : DEFAULT_ALERT_TEXT;
@@ -102,6 +133,7 @@ void Faces::trigger(const char* caption, const char* rawBody, uint32_t now, uint
   }
   msgStart = now;
   msgUntil = now + hold;
+  state = FaceState::Talking;
 
   if (which == Which::Smoker) smoker.trigger(rawBody, now);
   else if (which == Which::YesMan) yesman.onNotify(rawBody, now, holdMs);
@@ -147,14 +179,33 @@ void Faces::drawBubbleIcon(uint32_t now) {
   }
 }
 
+void Faces::drawZs(uint32_t now) {
+  const uint32_t period = 3600;
+  for (int i = 0; i < 3; ++i) {
+    uint32_t t = (now + (uint32_t)i * (period / 3)) % period;
+    float p = (float)t / (float)period;
+    int x = 104 + (int)(p * 8.0f) + (int)(2.0f * sinf(p * 6.28f));
+    int y = 46 - (int)(p * 26.0f);
+    disp->drawChar(x, y, 'z', SSD1306_WHITE, SSD1306_BLACK, p < 0.5f ? 1 : 2);
+  }
+}
+
 void Faces::updateAndDraw(uint32_t now) {
   gFrameDrawn = false;
-  if (which == Which::Smoker) smoker.updateAndDraw(now);
-  else if (which == Which::YesMan) yesman.updateAndDraw(now);
-  else idle.updateAndDraw(now);
+  if (pending && reached(now, wakeUntil)) {
+    pending = false;
+    fire(now, pendCaption.c_str(), pendBody.c_str(), pendHold);
+  }
+  if (state == FaceState::Talking && msgUntil != 0 && reached(now, msgUntil)) {
+    state = unread > 0 ? FaceState::Awake : FaceState::Sleeping;
+  }
+  if (which == Which::Smoker) smoker.updateAndDraw(now, state);
+  else if (which == Which::YesMan) yesman.updateAndDraw(now, state);
+  else idle.updateAndDraw(now, state);
   if (!gFrameDrawn) return;
 
   drawStrip(now);
+  if (state == FaceState::Sleeping) drawZs(now);
   drawBubbleIcon(now);
   disp->display();
 }

@@ -153,6 +153,7 @@ int Smoker::countLines() const {
 
 void Smoker::trigger(const char* rawBody, uint32_t now) {
   setBubbleText(rawBody);
+  dragOnly = false;
   act = Act::Inhale;
   actStart = now;
   scroll = 0;
@@ -222,6 +223,7 @@ int Smoker::maxScrollPx(uint32_t now) const {
 
 Smoker::Stick Smoker::stick(uint32_t now) const {
   float bobF = sinf((float)now * 0.00145f) * 1.15f + sinf((float)now * 0.00255f) * 0.35f;
+  bobF *= (1.0f - 0.5f * slp) * (state == FaceState::Talking ? 1.5f : 1.0f);
   int bob = iround(bobF);
 
   float t = smoothStep(cigShown);
@@ -267,7 +269,7 @@ void Smoker::spawnMote(float x, float y, float vx, float vy, uint8_t kind, uint8
 }
 
 void Smoker::stepMotes(uint32_t now, float dt, const Stick& pose) {
-  if (inhaleShown < 0.82f && (nextDrift == 0 || reached(now, nextDrift))) {
+  if (inhaleShown < 0.82f && state != FaceState::Sleeping && (nextDrift == 0 || reached(now, nextDrift))) {
     float jitter = (float)random(-30, 31) / 10.0f;
     float rise = -7.0f - (float)random(0, 90) / 10.0f;
     spawnMote(pose.x1, pose.y1, jitter, rise, 0, 220);
@@ -375,9 +377,27 @@ void Smoker::step(uint32_t now) {
   if (dt > 0.08f) dt = 0.08f;
   lastUpdate = now;
 
+  bool asleep = state == FaceState::Sleeping;
+  slp = approach(slp, asleep ? 1.0f : 0.0f, dt, asleep ? 2.2f : 5.0f);
+  if (slp < 0.001f) slp = 0.0f;
+  if (slp > 0.999f) slp = 1.0f;
+  breathPh += dt * (1.2f - 0.7f * slp);
+  if (asleep) {
+    dragOnly = false;
+    if (act != Act::Idle) enter(Act::Idle, now);
+    nextDragAt = now + (uint32_t)random(6000, 12000);
+  } else if (nextDragAt == 0) {
+    nextDragAt = now + (uint32_t)random(6000, 12000);
+  }
+
   switch (act) {
     case Act::Inhale:
-      if (reached(now, actStart + kInhaleMs)) enter(Act::Withdraw, now);
+      if (dragOnly) {
+        if (reached(now, actStart + kInhaleMs)) {
+          dragOnly = false;
+          enter(Act::Idle, now);
+        }
+      } else if (reached(now, actStart + kInhaleMs)) enter(Act::Withdraw, now);
       break;
     case Act::Withdraw:
       if (reached(now, actStart + kWithdrawMs)) enter(Act::Exhale, now);
@@ -411,6 +431,12 @@ void Smoker::step(uint32_t now) {
       }
       break;
     case Act::Idle:
+      if (!asleep && reached(now, nextDragAt)) {
+        dragOnly = true;
+        act = Act::Inhale;
+        actStart = now;
+        nextDragAt = now + (uint32_t)random(7000, 14000);
+      }
       break;
   }
 
@@ -440,7 +466,8 @@ void Smoker::step(uint32_t now) {
   stepBlink(now);
 }
 
-void Smoker::updateAndDraw(uint32_t now) {
+void Smoker::updateAndDraw(uint32_t now, FaceState st) {
+  state = st;
   step(now);
   if (lastDraw != 0 && (uint32_t)(now - lastDraw) < kFrameMs) return;
   lastDraw = now;
@@ -752,13 +779,14 @@ void Smoker::draw(uint32_t now) {
   drawCorners(now);
 
   Stick pose = stick(now);
-  float breath = 0.5f + 0.5f * sinf((float)now * 0.0012f);
-  float look = sinf((float)now * 0.00072f) * 0.8f + sinf((float)now * 0.0018f) * 0.2f;
+  float breath = 0.5f + 0.5f * sinf(breathPh);
+  float look = (sinf((float)now * 0.00072f) * 0.8f + sinf((float)now * 0.0018f) * 0.2f) * (1.0f - slp);
   if (act == Act::Inhale) look *= (1.0f - inhaleShown);
 
   float closeAmt = inhaleShown * 0.55f;
   float blinkClose = 1.0f - eyeOpen(now);
   if (blinkClose > closeAmt) closeAmt = blinkClose;
+  if (slp > closeAmt) closeAmt = slp;
 
   float mouthOpen = 0.0f;
   if (act == Act::Exhale) {
@@ -772,7 +800,7 @@ void Smoker::draw(uint32_t now) {
   drawHead(pose.bob, closeAmt, look, mouthOpen, cigInMouth, now);
   drawBody(pose.bob, inhaleShown, breath);
 
-  float heat = 0.42f + 0.22f * breath + inhaleShown * 0.5f;
+  float heat = (0.42f + 0.22f * breath) * (1.0f - 0.7f * slp) + inhaleShown * 0.5f;
   if (heat > 1.0f) heat = 1.0f;
   drawCigarette(pose, heat, cigShown, now);
   drawWisp(iround(pose.x1), iround(pose.y1), pose.mouthX, pose.mouthY, inhaleShown, now);

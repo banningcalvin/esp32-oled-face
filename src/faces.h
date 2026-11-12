@@ -4,6 +4,7 @@
 #include <Arduino.h>
 
 #include "face.h"
+#include "face_state.h"
 #include "smoker.h"
 #include "yesman.h"
 
@@ -25,7 +26,9 @@ class Faces {
   // smoker and yesman bubbles scroll. holdMs is the idle and yesman hold.
   void trigger(const char* caption, const char* rawBody, uint32_t now, uint32_t holdMs);
   void setBanner(const char* text, uint32_t untilMs);
-  void setUnread(uint16_t n) { unread = n; }
+  // Drives the face state: 0 sleeps, > 0 wakes. Call before trigger().
+  void setUnread(uint16_t n, uint32_t now);
+  FaceState faceState() const { return state; }
   void updateAndDraw(uint32_t now);
 
   // Number of registered faces, in registration order: idle, smoker, yesman.
@@ -47,6 +50,8 @@ class Faces {
 
   void drawStrip(uint32_t now);
   void drawBubbleIcon(uint32_t now);
+  void drawZs(uint32_t now);
+  void fire(uint32_t now, const char* caption, const char* rawBody, uint32_t holdMs);
 
   Adafruit_SSD1306* disp;
   Face idle;
@@ -56,6 +61,12 @@ class Faces {
   Which latched = Which::Idle;
   bool knobOverride = false;
   uint16_t unread = 0;
+  FaceState state = FaceState::Sleeping;
+  uint32_t wakeUntil = 0;
+  bool pending = false;
+  String pendCaption;
+  String pendBody;
+  uint32_t pendHold = 0;
   uint32_t msgStart = 0;
   uint32_t msgUntil = 0;
   uint32_t bannerUntil = 0;

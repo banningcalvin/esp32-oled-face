@@ -3,6 +3,8 @@
 #include <Adafruit_SSD1306.h>
 #include <Arduino.h>
 
+#include "face_state.h"
+
 // Hi-tech smoker, white on black, for a 128x64 SSD1306.
 // Idle is a lit cigarette with drifting smoke. trigger() runs one
 // sequence: inhale, take the cigarette out, exhale a puff, pop a
@@ -18,7 +20,7 @@ class Smoker {
 
   void trigger(const char* rawBody, uint32_t now);
   void setBanner(const char* text, uint32_t untilMs);
-  void updateAndDraw(uint32_t now);
+  void updateAndDraw(uint32_t now, FaceState state);
 
  private:
   enum class Act : uint8_t { Idle, Inhale, Withdraw, Exhale, Bubble, Return };
@@ -83,6 +85,11 @@ class Smoker {
   uint32_t lastDraw = 0;
   uint32_t nextDrift = 0;
   uint32_t nextPuff = 0;
+  uint32_t nextDragAt = 0;
+  bool dragOnly = false;
+  float slp = 1.0f;
+  float breathPh = 0;
+  FaceState state = FaceState::Sleeping;
   uint32_t bannerUntil = 0;
   uint32_t scrollParkedAt = 0;
   float cigShown = 0;

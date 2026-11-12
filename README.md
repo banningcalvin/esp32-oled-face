@@ -20,7 +20,7 @@ Re-run the same script any time to change the IP; add `-DryRun` (PowerShell) or 
 
 # CFace
 
-An always-on face for a 0.96 inch SSD1306 OLED on an ESP32. Selectable faces: `idle` (the original), `smoker` (hi-tech, cigarette), and `yesman` (a screen-headed grin). The board boots on `BOOT_FACE` and that face keeps moving; it never sits on a static frame. When a Cursor agent turn finishes, a small companion on your computer posts to the board and the active face plays its alert.
+An always-on face for a 0.96 inch SSD1306 OLED on an ESP32. Selectable faces: `idle` (the original), `smoker` (hi-tech, cigarette), and `yesman` (a screen-headed grin). The board boots on `BOOT_FACE` asleep (unread is 0) and wakes on the first notification. When a Cursor agent turn finishes, a small companion on your computer posts to the board and the active face plays its alert.
 
 `idle` widens its eyes. `smoker` inhales, exhales, and shows a bubble icon. `yesman` perks up and shows a bubble icon. The posted text and JSON scroll in the top overlay. All three are described in [What the face does](#what-the-face-does).
 
@@ -262,7 +262,15 @@ curl -s -X POST http://192.168.1.42/notify \
 
 `"face":"idle"`, `"face":"smoker"`, and `"face":"yesman"` are the stable ids. Any other value leaves the current face in place, and the notify still plays on that face. The companion can keep posting its usual body; the board uses whatever arrived. Bodies larger than 4KB are refused. Anything accepted is kept whole.
 
-Every face keeps moving. There is no static frame.
+Every face keeps moving, and all three share the same states, driven by the unread count and notifications:
+
+| State | When | Look |
+| --- | --- | --- |
+| `SLEEPING` | unread is 0 (also at boot) | Eyes closed, slow breathing, little drifting `z` letters, minimal motion. `smoker`: cigarette resting and dim, no smoking sequence. `yesman`: calm closed-eye look, no scanline or flicker. |
+| `AWAKE` | unread > 0 | Eyes open with the normal idle animation (blinks, glances, breathing). `smoker` holds the cigarette and takes an occasional drag. |
+| `TALKING` | a new notification, for the alert duration | Mouth moving, brows perked, faster motion. `smoker` keeps its inhale / exhale / puff sequence. Settles to `AWAKE` while unread > 0. |
+
+Transitions: a notification while asleep first shows a brief (about 0.8 s) wake-up with the eyes opening, then talks. Clearing unread (button on GPIO 32 or `POST /clear`) cancels any alert and the eyes droop closed into `SLEEPING`. The state is a shared `FaceState` enum (`src/face_state.h`) passed to every face's `updateAndDraw()`.
 
 ### `idle`
 

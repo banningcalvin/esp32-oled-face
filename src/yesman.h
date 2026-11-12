@@ -3,6 +3,8 @@
 #include <Adafruit_SSD1306.h>
 #include <Arduino.h>
 
+#include "face_state.h"
+
 // Face id "yesman".
 // An original monochrome screen-face: monitor bezel, round eyes, wide grin.
 // Always moving (blink, grin twitch, scanline, flicker). On a prompt-complete
@@ -29,7 +31,7 @@ class YesManFace {
   void trigger(const char* text, uint32_t now, uint32_t holdMs);
 
   void setBanner(const char* text, uint32_t untilMs);
-  void updateAndDraw(uint32_t now);
+  void updateAndDraw(uint32_t now, FaceState state);
 
   bool selected() const { return selected_; }
   void setSelected(bool on) { selected_ = on; }
@@ -71,6 +73,10 @@ class YesManFace {
   float lookTargetX = 0;
   float lookTargetY = 0;
   float perk = 0;
+  float slp = 1.0f;
+  float talk = 0;
+  float breathPh = 0;
+  FaceState state = FaceState::Sleeping;
   float perkTarget = 0;
   float scrollPxPerMs = 0.014f;
   bool started = false;

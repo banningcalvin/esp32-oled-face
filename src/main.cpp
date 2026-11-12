@@ -138,7 +138,7 @@ void handleNotify() {
 
   uint32_t now = millis();
   if (unread < 9999) unread++;
-  faces.setUnread(unread);
+  faces.setUnread(unread, now);
   faces.trigger(text, body.c_str(), now, ALERT_HOLD_MS);
   startNotifyLed(now);
   char ok[48];
@@ -148,7 +148,7 @@ void handleNotify() {
 
 void clearUnread() {
   unread = 0;
-  faces.setUnread(0);
+  faces.setUnread(0, millis());
   notifyLedActive = false;
   digitalWrite(NOTIFY_LED_PIN, LOW);
 }

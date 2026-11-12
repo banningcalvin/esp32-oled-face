@@ -214,6 +214,19 @@ void YesManFace::step(uint32_t now) {
   if (dt > 0.08f) dt = 0.08f;
   lastUpdate = now;
 
+  bool asleep = state == FaceState::Sleeping;
+  slp = approach(slp, asleep ? 1.0f : 0.0f, dt, asleep ? 2.2f : 5.0f);
+  if (slp < 0.001f) slp = 0.0f;
+  if (slp > 0.999f) slp = 1.0f;
+  talk = approach(talk, state == FaceState::Talking ? 1.0f : 0.0f, dt, 6.0f);
+  breathPh += dt * (1.6f - 0.9f * slp);
+  if (asleep) {
+    perkTarget = 0.0f;
+    lookTargetX = 0.0f;
+    lookTargetY = 0.0f;
+    nextGlanceAt = now + 1000;
+  }
+
   if (perkTarget > 0.0f && reached(now, perkUntil)) perkTarget = 0.0f;
   float speed = (perkTarget > perk) ? 7.5f : 2.4f;
   perk = approach(perk, perkTarget, dt, speed);
@@ -276,12 +289,13 @@ void YesManFace::draw(uint32_t now) {
 
   // CRT scanline and a short flicker live in the black, under the features,
   // so a resting frame still changes. Features paint over them.
+  bool calm = slp > 0.5f;
   int scanLimit = clipBottom < 60 ? clipBottom : 60;
   int scan = 5 + (int)((now / 30) % 52);
-  if (scan >= 5 && scan < scanLimit) {
+  if (!calm && scan >= 5 && scan < scanLimit) {
     for (int x = 8; x < 120; x += 2) disp->drawPixel(x, scan, SSD1306_WHITE);
   }
-  bool flicker = (now % 2800u) < 55u;
+  bool flicker = !calm && (now % 2800u) < 55u;
   if (flicker) {
     int y0 = 8 + (int)((now / 40) % 22);
     for (int y = y0; y < y0 + 2 && y < scanLimit; ++y) {
@@ -308,16 +322,20 @@ void YesManFace::draw(uint32_t now) {
   }
   if (open < 0.0f) open = 0.0f;
   if (open > 1.0f) open = 1.0f;
+  open *= (1.0f - slp);
+  int breathY = iround(sinf(breathPh) * (0.4f + 0.8f * slp));
 
   uint32_t kickPhase = now % 2600u;
   float kickAmp = 0.0f;
-  if (kickPhase < 220u) kickAmp = sinf((float)kickPhase / 220.0f * 3.14159265f) * 1.4f;
-  float twitch = sinf((float)now * 0.005f) * 1.2f;
+  if (kickPhase < 220u && !calm) kickAmp = sinf((float)kickPhase / 220.0f * 3.14159265f) * 1.4f;
+  float twitch = sinf((float)now * 0.005f) * 1.2f * (1.0f - slp);
   float half = blend(33.0f, 40.0f, perk) + twitch;
   int hw = iround(half);
   if (hw < 12) hw = 12;
   int corner = iround(blend(40.0f, 18.0f, perk));
-  float lowerDrop = blend(11.0f, 9.0f, perk) + 0.6f * sinf((float)now * 0.0033f);
+  float lowerDrop = blend(11.0f, 9.0f, perk) + 0.6f * sinf((float)now * 0.0033f) * (1.0f - slp);
+  lowerDrop += talk * fabsf(sinf((float)now * 0.014f)) * 4.0f;
+  lowerDrop -= slp * 3.0f;
   int smileBot = corner + 3 + iround(lowerDrop) + 2;
   int limit = clipBottom - 1;
   if (smileBot > limit) corner -= smileBot - limit;
@@ -356,7 +374,7 @@ void YesManFace::draw(uint32_t now) {
   int eyeRyFull = iround(blend(10.0f, 6.0f, perk));
   int eyeRy = iround((float)eyeRyFull * open);
   if (eyeRy < 1) eyeRy = 1;
-  int eyeY = iround(blend(24.0f, 11.0f, perk));
+  int eyeY = iround(blend(24.0f, 11.0f, perk)) + breathY;
   int pupilR = eyeRy >= 6 ? 3 : 2;
   float wobX = 0.35f * sinf((float)now * 0.0022f);
   float wobY = 0.22f * sinf((float)now * 0.0018f + 0.4f);
@@ -401,7 +419,8 @@ void YesManFace::draw(uint32_t now) {
   gFrameDrawn = true;
 }
 
-void YesManFace::updateAndDraw(uint32_t now) {
+void YesManFace::updateAndDraw(uint32_t now, FaceState st) {
+  state = st;
   step(now);
   if (lastDraw != 0 && (uint32_t)(now - lastDraw) < kFrameMs) return;
   lastDraw = now;

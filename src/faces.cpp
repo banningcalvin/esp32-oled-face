@@ -122,24 +122,21 @@ void Faces::drawStrip(uint32_t now) {
   if (alert) line = msg;
   else if (bannerUntil != 0 && (int32_t)(bannerUntil - now) > 0) line = banner;
   if (line != nullptr) {
+    disp->fillRect(0, 0, OLED_WIDTH, kStripH, SSD1306_BLACK);
     int len = (int)strlen(line);
     int x = 0;
     if (len > (int)kFitChars) {
       int loop = len * 6 + OLED_WIDTH;
       x = OLED_WIDTH - (int)(((now - msgStart) * kScrollPxPerSec / 1000u) % (uint32_t)loop);
     }
-    disp->setCursor(x, 0);
+    disp->setCursor(x, 4);
     disp->print(line);
   }
-  char u[24];
-  snprintf(u, sizeof u, "%u unread", (unsigned)unread);
-  disp->setCursor(0, 8);
-  disp->print(u);
 }
 
 void Faces::drawBubbleIcon(uint32_t now) {
   if (which == Which::Idle || msgUntil == 0 || (int32_t)(msgUntil - now) <= 0) return;
-  const int x = 106, y = 19;
+  const int x = 106, y = 18;
   disp->fillRect(x, y, 18, 12, SSD1306_BLACK);
   disp->drawRoundRect(x, y, 18, 10, 3, SSD1306_WHITE);
   disp->drawLine(x + 4, y + 10, x + 4, y + 12, SSD1306_WHITE);
@@ -157,22 +154,7 @@ void Faces::updateAndDraw(uint32_t now) {
   else idle.updateAndDraw(now);
   if (!gFrameDrawn) return;
 
-  // Faces render at 128x64. Squeeze each group of 4 rows into 3 (the middle
-  // two merge so 1px lines survive) and park the result in rows 16..63.
-  uint8_t* buf = disp->getBuffer();
-  for (int x = 0; x < OLED_WIDTH; ++x) {
-    uint64_t src = 0;
-    for (int p = 0; p < 8; ++p) src |= (uint64_t)buf[p * OLED_WIDTH + x] << (p * 8);
-    uint64_t out = 0;
-    for (int g = 0; g < 16; ++g) {
-      uint32_t s = (uint32_t)(src >> (g * 4)) & 0xF;
-      uint32_t o = (s & 1u) | (((s >> 1) | (s >> 2)) & 1u) << 1 | ((s >> 3) & 1u) << 2;
-      out |= (uint64_t)o << (g * 3);
-    }
-    out <<= kStripH;
-    for (int p = 0; p < 8; ++p) buf[p * OLED_WIDTH + x] = (uint8_t)(out >> (p * 8));
-  }
-  drawBubbleIcon(now);
   drawStrip(now);
+  drawBubbleIcon(now);
   disp->display();
 }

@@ -58,7 +58,8 @@ static constexpr char DEVICE_HOSTNAME[] = "cface";
 
 // Notify LED on D25 (GPIO 25). A successful POST /notify — the same
 // event that alerts the face — blinks this pin from loop(): 500 ms on,
-// 500 ms off, for 3 seconds (three on pulses), then leaves it off.
+// 500 ms off, for 3 seconds (three on pulses), then stays on while
+// unread > 0 and goes off when unread is cleared.
 static constexpr int NOTIFY_LED_PIN = 25;
 static constexpr uint32_t NOTIFY_LED_ON_MS = 500;
 static constexpr uint32_t NOTIFY_LED_OFF_MS = 500;

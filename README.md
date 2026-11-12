@@ -22,7 +22,7 @@ Re-run the same script any time to change the IP; add `-DryRun` (PowerShell) or 
 
 An always-on face for a 0.96 inch SSD1306 OLED on an ESP32. Selectable faces: `idle` (the original), `smoker` (hi-tech, cigarette), and `yesman` (a screen-headed grin). The board boots on `BOOT_FACE` and that face keeps moving; it never sits on a static frame. When a Cursor agent turn finishes, a small companion on your computer posts to the board and the active face plays its alert.
 
-`idle` widens its eyes. `smoker` inhales, exhales, and shows a bubble icon. `yesman` perks up and shows a bubble icon. The posted text and JSON scroll in the top strip. All three are described in [What the face does](#what-the-face-does).
+`idle` widens its eyes. `smoker` inhales, exhales, and shows a bubble icon. `yesman` perks up and shows a bubble icon. The posted text and JSON scroll in the top overlay. All three are described in [What the face does](#what-the-face-does).
 
 ## Wiring
 
@@ -37,7 +37,7 @@ Match the **labels on the OLED**, not a fixed connector order. Four-pin modules 
 
 Those are the defaults in `include/config.h`. Use the GPIO numbers printed on an ESP32 dev board (often `21` / `G21`), not the `D21` labels from an ESP8266 NodeMCU.
 
-LED on GPIO 25 blinks 500ms on/off for 3 seconds on a notify.
+LED on GPIO 25 blinks 500ms on/off for 3 seconds on a notify, then stays solid ON while unread > 0. It turns OFF when unread is cleared (button or `POST /clear`). A new notification while unread restarts the 3 second blink, then back to solid.
 
 A 3-pin potentiometer picks the face. Wire one outer leg to 3V3, the other outer leg to GND, and the wiper (middle pin) to GPIO **33** (`POT_PIN` in `include/config.h`). GPIO 33 is on ADC1, which keeps working with Wi-Fi on.
 
@@ -60,16 +60,16 @@ Assumed panel: SSD1306, 128×64, I2C. The firmware probes `0x3C`, then `0x3D`. T
 
 ## Screen layout
 
-The OLED is two-color: the top 16 rows are yellow, the bottom 48 rows are blue.
+Faces render across the full 128×64 panel. When idle, only the face is shown: no text and no unread line.
 
-- **Top strip (y 0..15, yellow):** all text. Line 1 is the alert, `got a new reply {json}`, or the Wi-Fi/IP status; text longer than 21 characters scrolls. Line 2 is always `N unread`.
-- **Face area (y 16..63, blue):** the faces only. Each face renders at 128×64 and is squeezed vertically to 48 rows (every 4 rows become 3, so thin lines survive). On smoker and yesman a small speech-bubble icon with animated dots shows in the face area while a reply message is scrolling.
+- **Overlay (y 0..15, transient):** while an alert is showing, the top 16 rows are cleared and the alert text (or `got a new reply {json}`, or a brief Wi-Fi/IP status) is drawn there; text longer than 21 characters scrolls. The face stays drawn below. When the alert ends the strip goes back to the face.
+- **Bubble icon:** on smoker and yesman a small speech-bubble icon with animated dots appears under the strip while a reply message is scrolling. The smoker still inhales, exhales, and puffs at full size.
 
 The scrolled JSON is flattened to one line and capped at about 200 characters. The board still accepts bodies up to 4KB.
 
 ## Unread count
 
-The board counts each accepted `POST /notify`. The count shows on line 2 of the top strip and is reported as `unread` by `GET /health`. It is cleared (to 0) by:
+The board counts each accepted `POST /notify`. The count is kept internally and reported as `unread` by `GET /health`. It is cleared (to 0) by:
 
 - a short press of the button on GPIO 32, or
 - `POST /clear` (manual use; nothing clears it automatically, not even submitting a prompt).
@@ -104,7 +104,7 @@ Edit **`include/config.h`** only, then flash again.
 - `DEFAULT_ALERT_TEXT` — caption used when the POST omits `text` on the idle face
 - `BOOT_FACE` — face at power-on: `idle`, `smoker`, or `yesman`. A notify can switch it later with `"face"`. The default in `config.h` is `idle`.
 
-Until `WIFI_SSID` is changed, the board skips Wi-Fi and still animates. The top strip says `Set WiFi in config.h` for a few seconds.
+Until `WIFI_SSID` is changed, the board skips Wi-Fi and still animates. The top overlay says `Set WiFi in config.h` for a few seconds.
 
 ## Flash
 
@@ -118,7 +118,7 @@ pio device monitor -b 115200
 
 If upload fails on a picky USB chip, set `upload_speed = 115200` in `platformio.ini` and upload again.
 
-On boot the face starts moving immediately. After Wi-Fi joins, the top strip shows `IP a.b.c.d` for about six seconds, then clears. The same URL is printed on the serial monitor every 30 seconds:
+On boot the face starts moving immediately. After Wi-Fi joins, the top overlay shows `IP a.b.c.d` for about six seconds, then clears. The same URL is printed on the serial monitor every 30 seconds:
 
 ```text
 CFace listening  http://192.168.1.42:80/notify
@@ -141,7 +141,7 @@ The script reads the hook's JSON on stdin, picks a short caption, and posts:
 {"event":"prompt_complete","text":"New reply"}
 ```
 
-The board keeps that body as posted. The smoker and yesman faces scroll it in the top strip. An optional `"face"` field (`"idle"`, `"smoker"`, or `"yesman"`) switches which face reacts; any other value leaves the current face. See [What the face does](#what-the-face-does).
+The board keeps that body as posted. The smoker and yesman faces scroll it in the top overlay. An optional `"face"` field (`"idle"`, `"smoker"`, or `"yesman"`) switches which face reacts; any other value leaves the current face. See [What the face does](#what-the-face-does).
 
 | Turn | Top-strip text |
 | --- | --- |
@@ -149,7 +149,7 @@ The board keeps that body as posted. The smoker and yesman faces scroll it in th
 | `stop` with `error` | `Hit a snag` |
 | `stop` with `aborted` | `Stopped` |
 
-The full assistant reply is never sent. The top strip only fits about 21 characters, and the caption is just a nudge that something new happened. The script prints `{}` and does not return a `followup_message`, so this hook cannot start another agent turn. If the board is off or the IP is wrong, the script gives up in about two seconds and Cursor continues.
+The full assistant reply is never sent. The top overlay only fits about 21 characters, and the caption is just a nudge that something new happened. The script prints `{}` and does not return a `followup_message`, so this hook cannot start another agent turn. If the board is off or the IP is wrong, the script gives up in about two seconds and Cursor continues.
 
 This is for the **Cursor desktop app** on the same LAN as the ESP32. A cloud agent does not run `~/.cursor/hooks.json`, and it cannot see your desk's LAN address.
 
@@ -269,7 +269,7 @@ Every face keeps moving. There is no static frame.
 The original face. It does not play the cigarette sequence.
 
 - **Waiting:** slow breathing, a blink every few seconds, and an occasional glance. A small pupil wobble keeps running between those.
-- **Alert:** on `prompt_complete`, the eyes ease wider, the brows lift, the smile grows, and the motion continues (including the odd blink). The caption (`New reply`, the `text` field, or `DEFAULT_ALERT_TEXT`) shows in the top strip. After `ALERT_HOLD_MS` the face eases back and the caption clears.
+- **Alert:** on `prompt_complete`, the eyes ease wider, the brows lift, the smile grows, and the motion continues (including the odd blink). The caption (`New reply`, the `text` field, or `DEFAULT_ALERT_TEXT`) shows in the top overlay. After `ALERT_HOLD_MS` the face eases back and the caption clears.
 
 ### `smoker`
 
@@ -280,14 +280,14 @@ On `prompt_complete`, in order:
 1. He inhales on the cigarette (the ember flares, the shades narrow, smoke pulls toward the mouth).
 2. He takes the cigarette out.
 3. He exhales a visible puff.
-4. A bubble icon appears in the face area and the top strip scrolls `got a new reply` plus the JSON body.
+4. A bubble icon appears under the top overlay, which scrolls `got a new reply` plus the JSON body.
 5. The icon and scroll end after the hold, the cigarette returns, the cigarette comes back, and the idle smoking loop resumes.
 
 ### `yesman`
 
 Face id `yesman`. An original screen-shaped head, white on black: a monitor bezel, round eyes, and a wide toothy grin. It is not copied from game art. It never holds a still frame — the eyes blink, one corner of the grin twitches, a scanline walks the screen, and the glass flickers.
 
-On `prompt_complete` he perks up, the grin eases wider, and a bubble icon shows in the face area while the top strip scrolls `got a new reply` plus the JSON body. When the hold ends, the grin settles back into the idle loop.
+On `prompt_complete` he perks up, the grin eases wider, and a bubble icon shows while the top overlay scrolls `got a new reply` plus the JSON body. When the hold ends, the grin settles back into the idle loop.
 
 ```bash
 curl -s -X POST http://192.168.1.42/notify \
@@ -299,7 +299,7 @@ Boot stays on `BOOT_FACE`. That value is `idle` unless you change it. `yesman` c
 
 ### Boot
 
-The selected face is already moving while Wi-Fi connects. The IP replaces the "Joining WiFi" line once the board has an address. The status always sits in the top strip, whichever face is showing.
+The selected face is already moving while Wi-Fi connects. The IP replaces the "Joining WiFi" line once the board has an address. The status shows briefly in the top overlay, whichever face is showing.
 
 ## Testing the button
 

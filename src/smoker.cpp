@@ -638,6 +638,8 @@ void Smoker::drawBanner(uint32_t now) {
 }
 
 void Smoker::drawBubble(uint32_t now) {
+  // Text lives only in the top-strip overlay; Faces draws the small bubble icon.
+  return;
   if (bubbleShown < 0.04f) return;
 
   int x, y, w, h, clipL, clipT, clipR, clipB;

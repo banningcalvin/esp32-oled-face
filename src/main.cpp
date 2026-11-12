@@ -39,9 +39,12 @@ void startNotifyLed(uint32_t now) {
   digitalWrite(NOTIFY_LED_PIN, HIGH);
 }
 
-// 500 ms on, 500 ms off, three times, then off. Elapsed time only — no delay().
+// 500 ms on, 500 ms off, three times, then solid while unread > 0. Elapsed time only — no delay().
 void serviceNotifyLed(uint32_t now) {
-  if (!notifyLedActive) return;
+  if (!notifyLedActive) {
+    digitalWrite(NOTIFY_LED_PIN, unread > 0 ? HIGH : LOW);
+    return;
+  }
   // handleNotify samples millis() during this same loop, which can be
   // later than the stamp appLoop captured. A backwards delta would wrap
   // and kill the pulse; ignore it and leave the pin as startNotifyLed set it.
@@ -49,7 +52,7 @@ void serviceNotifyLed(uint32_t now) {
   if ((int32_t)elapsed < 0) return;
   if (elapsed >= NOTIFY_LED_BLINK_MS) {
     notifyLedActive = false;
-    digitalWrite(NOTIFY_LED_PIN, LOW);
+    digitalWrite(NOTIFY_LED_PIN, unread > 0 ? HIGH : LOW);
     return;
   }
   uint32_t phase = elapsed % (NOTIFY_LED_ON_MS + NOTIFY_LED_OFF_MS);
@@ -146,6 +149,8 @@ void handleNotify() {
 void clearUnread() {
   unread = 0;
   faces.setUnread(0);
+  notifyLedActive = false;
+  digitalWrite(NOTIFY_LED_PIN, LOW);
 }
 
 void handleClear() {
